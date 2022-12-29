@@ -1,0 +1,154 @@
+import ChatGPT
+import spacy
+import json
+import sqlite3
+import pyttsx3
+import speech_recognition as sr
+import pyparticle
+from flask import Flask, request
+from tkinter import *
+
+# Initialize Flask app and NLP model
+app = Flask(__name__)
+nlp = spacy.load("en_core_web_sm")
+
+# Initialize text-to-speech engine and speech recognition
+engine = pyttsx3.init()
+r = sr.Recognizer()
+
+# Initialize database connection
+conn = sqlite3.connect("users.db")
+cursor = conn.cursor()
+
+# Initialize GUI window
+window = Tk()
+window.title("ChatGPT API")
+
+# Create text input field and send button
+input_field = Entry(window, width=70)
+send_button = Button(window, text="Send", command=send_message)
+
+# Create display area for conversation
+conversation_display = Text(window, width=70, height=20)
+
+# Create login and logout buttons
+login_button = Button(window, text="Login", command=login)
+logout_button = Button(window, text="Logout", command=logout)
+
+# Create start new chat button
+new_chat_button = Button(window, text="Start New Chat", command=start_new_chat)
+
+# Create particle effect display
+particle_display = pyparticle.ParticleSim(window, width=200, height=200)
+
+# Set up layout of GUI elements
+input_field.pack()
+send_button.pack()
+conversation_display.pack()
+login_button.pack()
+logout_button.pack()
+new_chat_button.pack()
+particle_display.pack()
+
+def send_message():
+    # Get user input and send it to ChatGPT for processing
+    user_input = input_field.get()
+    doc = nlp(user_input)
+    intent = doc.ents[0].text
+    response = ChatGPT.generate_response(intent)
+    
+    # Update conversation display with user input and ChatGPT response
+    conversation_display.insert(END, "User: " + user_input + "\n")
+    conversation_display.insert(END, "ChatGPT: " + response + "\n")
+    
+    # Clear input field
+    input_field.delete(0, END)
+    
+    # Check if user input is a command to access another program
+    if intent == "open program":
+        program_name = doc.ents[1].text
+        # Open the specified program
+        open_program(program_name)
+    
+    # Update particle display
+    particle_display.update()
+
+def login():
+    # Prompt user for username and password
+    username = input("Enter your username: ")
+    password = input("Enter your password: ")
+    
+    # Check if username and password are correct
+    cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+     user = cursor.fetchone()
+    if user:
+        # If login is successful, update GUI to show logged in status
+        login_button.config(state="disabled")
+        logout_button.config(state="normal")
+        conversation_display.insert(END, "Welcome, " + username + "!\n")
+    else:
+        # If login is unsuccessful, display error message
+        conversation_display.insert(END, "Invalid username or password.\n")
+
+def logout():
+    # Update GUI to show logged out status
+    login_button.config(state="normal")
+    logout_button.config(state="disabled")
+    conversation_display.insert(END, "You have been logged out.\n")
+
+def start_new_chat():
+    # Clear conversation display and start a new chat with ChatGPT
+    conversation_display.delete("1.0", END)
+    conversation_display.insert(END, "ChatGPT: Hi there! How can I help you today?\n")
+
+def open_program(program_name):
+    # Open the specified program
+    if program_name == "calculator":
+        subprocess.run("calc.exe")
+    elif program_name == "text editor":
+        subprocess.run("notepad.exe")
+    # Add additional cases for other programs as needed
+
+@app.route("/chatgpt", methods=["POST"])
+def chatgpt():
+    # Process user input and generate ChatGPT response
+    data = request.get_json()
+    user_input = data["input"]
+    doc = nlp(user_input)
+    intent = doc.ents[0].text
+    response = ChatGPT.generate_response(intent)
+    
+    # Return ChatGPT response as JSON
+    return json.dumps({"response": response})
+
+def listen_for_speech():
+    # Listen for speech input from the user
+    with sr.Microphone() as source:
+        audio = r.listen(source)
+    try:
+        # Convert speech to text and send it to ChatGPT for processing
+        user_input = r.recognize_google(audio)
+        send_message(user_input)
+    except sr.UnknownValueError:
+        # If speech is not understood, display error message
+        conversation_display.insert(END, "I'm sorry, I didn't understand that.\n")
+
+# Set up event listener for send button press
+send_button.bind("<Button-1>", send_message)
+
+# Set up event listener for login button press
+login_button.bind("<Button-1>", login)
+
+# Set up event listener for logout button press
+logout_button.bind("<Button-1>", logout)
+
+# Set up event listener for new chat button press
+new_chat_button.bind("<Button-1>", start_new
+chat_button.bind("<Button-1>", start_new_chat)
+
+# Set up event listener for speech input
+r.listen_in_background(sr.Microphone(), listen_for_speech)
+
+# Start Flask app and GUI event loop
+app.run()
+window.mainloop()
